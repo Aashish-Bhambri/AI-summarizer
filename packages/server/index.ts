@@ -2,6 +2,8 @@ import { configDotenv } from 'dotenv';
 import express from 'express';
 import type { Request, Response } from 'express';
 import OpenAI from 'openai';
+import z from 'zod';
+
 
 const app = express();
 app.use(express.json());
@@ -23,8 +25,25 @@ app.get('/api/hello', (req: Request, res: Response) => {
 
 const conversations = new Map<string,string>();
 
+const chatSchema = z.object({
+   prompt:z.string()
+   .trim()
+   .min(1,'Prompt is Required')
+   .max(1000,"Prompt is too long (max 1000 characters)"),
+   conversationID:z.string().uuid()
+})
+
 app.post('/api/chat',async(req:Request, res:Response)=>{
-   
+   const parseResult = chatSchema.safeParse(req.body);
+
+   if(!parseResult.success){
+      res.status(400).json(parseResult.error.format());
+      return;
+   }
+
+ 
+
+   try{
    const {prompt,conversationID}=req.body;
    const response= await client.responses.create({
       model:'gpt-4o-mini',
@@ -36,8 +55,12 @@ app.post('/api/chat',async(req:Request, res:Response)=>{
 
    conversations.set(conversationID,response.id);
    res.json({message: response.output_text})
-   
+
+   }catch(error){
+      res.status(500).json({error:"Failed to generate response"})
+   }
 })
+
 app.listen(port, () => {
    console.log(`Server is runnning on http://localhost:${port}`);
 });
